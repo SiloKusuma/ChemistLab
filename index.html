@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>ChemistLab - Virtual Chemistry Experiment</title>
+    <meta name="description" content="An interactive virtual chemistry lab for real-time simulations of chemical reactions. Learn chemistry in a fun and safe way.">
+    <meta name="keywords" content="chemistry, virtual lab, experiment, education, chemical reactions">
+    <meta name="author" content="Silo Kusuma">
+    <meta name="robots" content="index, follow">
+    
+    <meta property="og:title" content="ChemistLab - Virtual Chemistry Experiment">
+    <meta property="og:description" content="An interactive virtual chemistry lab for real-time simulations of chemical reactions. Learn chemistry in a fun and safe way.">
+    <meta property="og:type" content="website">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #000000;
+            --accent-color: #000000;
+            --border-color: #000000;
+        }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow-x: hidden;
+            touch-action: manipulation;
+        }
+
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        .beaker-wrapper {
+            position: relative;
+            width: 220px;
+            height: 260px;
+            margin: 0 auto;
+        }
+        @media (min-width: 768px) {
+            .beaker-wrapper { width: 280px; height: 320px; }
+        }
+
+        .beaker {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            border: 6px solid var(--accent-color);
+            border-top: none;
+            border-bottom-left-radius: 40px;
+            border-bottom-right-radius: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+            z-index: 10;
+        }
+
+        .beaker::after {
+            content: '';
+            position: absolute;
+            top: 10%;
+            left: 10%;
+            width: 15%;
+            height: 60%;
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 20px;
+            pointer-events: none;
+        }
+
+        .beaker-rim {
+            position: absolute;
+            top: 0;
+            width: 105%;
+            left: -2.5%;
+            height: 12px;
+            background: var(--accent-color);
+            border-radius: 10px;
+            z-index: 11;
+        }
+
+        .liquid {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 0%;
+            transition: all 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            background-color: #f0f0f0;
+        }
+
+        .liquid-surface {
+            position: absolute;
+            top: -10px;
+            left: 0;
+            width: 100%;
+            height: 20px;
+            background: inherit;
+            filter: brightness(90%);
+            border-radius: 50%;
+            animation: wave 2s infinite ease-in-out;
+        }
+
+        @keyframes wave {
+            0%, 100% { transform: translateY(0) scaleX(1); }
+            50% { transform: translateY(4px) scaleX(1.02); }
+        }
+
+        .bubble {
+            position: absolute;
+            bottom: -20px;
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: floatUp 3s infinite ease-in;
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(1); opacity: 0; }
+            20% { opacity: 1; }
+            100% { transform: translateY(-280px) scale(1.5); opacity: 0; }
+        }
+
+        .chem-card {
+            border: 2px solid #000;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            background: white;
+            user-select: none;
+        }
+
+        .chem-card:active { transform: scale(0.95); }
+        .chem-card.active {
+            background: #000;
+            color: #fff;
+            box-shadow: 4px 4px 0px #888;
+        }
+
+        .shake-heavy { animation: shake 0.1s infinite; }
+        @keyframes shake {
+            0% { transform: translate(2px, 1px) rotate(0deg); }
+            50% { transform: translate(-1px, -2px) rotate(-1deg); }
+            100% { transform: translate(1px, 2px) rotate(1deg); }
+        }
+
+        .achievement-toast {
+            position: fixed;
+            right: -400px;
+            top: 100px;
+            width: 280px;
+            background: white;
+            border: 3px solid black;
+            padding: 1rem;
+            box-shadow: 8px 8px 0px black;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            z-index: 1000;
+        }
+
+        .achievement-toast.active { right: 20px; }
+
+        #reaction-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(255,255,255,0.98);
+            z-index: 100;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #000; border-radius: 10px; }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+    <div id="achievement-container" class="achievement-toast">
+        <div>
+            <p class="text-[10px] font-bold uppercase tracking-widest opacity-50">Achievement Unlocked</p>
+            <p id="ach-title" class="font-bold text-sm uppercase"></p>
+        </div>
+    </div>
+
+    <header class="p-4 md:p-6 border-b-4 border-black flex justify-between items-center bg-white sticky top-0 z-40">
+        <div>
+            <h1 class="text-2xl md:text-3xl font-bold tracking-tighter uppercase leading-none">ChemistLab<span class="font-light opacity-50 ml-1">v2.1</span></h1>
+            <p class="text-[9px] md:text-[10px] tracking-widest uppercase opacity-60">Professional Virtual Lab</p>
+        </div>
+        <button onclick="resetLab()" class="text-xs md:text-base px-4 py-2 border-2 border-black font-bold uppercase hover:bg-black hover:text-white transition-all active:translate-y-1 active:shadow-none shadow-[4px_4px_0px_rgba(0,0,0,1)]">Reset</button>
+    </header>
+
+    <main class="flex-grow flex flex-col lg:flex-row">
+        
+        <div class="w-full lg:w-[350px] border-b-4 lg:border-b-0 lg:border-r-4 border-black p-4 md:p-6 bg-white overflow-y-auto max-h-[50vh] lg:max-h-[calc(100vh-100px)]">
+            <div class="flex items-center justify-between border-b-2 border-black pb-2 mb-4">
+                <h2 class="text-xs font-bold uppercase tracking-widest">Inventory</h2>
+                <span id="item-count" class="text-[10px] mono bg-black text-white px-2 py-0.5">0 Selected</span>
+            </div>
+            
+            <div id="chemical-grid" class="grid grid-cols-2 gap-3 pr-1">
+                </div>
+
+            <div class="mt-8">
+                <h3 class="text-[10px] font-bold uppercase tracking-widest mb-3 flex justify-between">
+                    Telemetry
+                </h3>
+                <div id="log-display" class="h-32 lg:h-48 overflow-y-auto text-[11px] mono space-y-2 border-2 border-black p-3 bg-gray-50 flex flex-col-reverse">
+                    <p class="opacity-40">> Lab Ready.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex-grow flex flex-col items-center justify-center p-6 md:p-12 relative overflow-hidden bg-[radial-gradient(#ccc_1px,transparent_1px)] [background-size:24px_24px]">
+            
+            <div id="beaker-zone" class="beaker-wrapper">
+                <div class="beaker-rim"></div>
+                <div id="beaker-main" class="beaker">
+                    <div id="liquid-body" class="liquid">
+                        <div class="liquid-surface"></div>
+                        <div id="bubble-container"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-8 md:mt-12 text-center z-10">
+                <div id="chem-name-display" class="text-3xl md:text-6xl font-bold uppercase tracking-tighter mb-1">Standby</div>
+                <div id="chem-formula-display" class="text-lg md:text-2xl mono opacity-40 font-bold">-</div>
+                <div id="chem-desc-display" class="mt-4 text-xs md:text-sm max-w-sm mx-auto italic opacity-60 px-4">Tap a chemical to add it to the reaction tube.</div>
+            </div>
+
+            <div id="smoke-box" class="absolute pointer-events-none opacity-0 transition-opacity duration-700">
+                <svg width="300" height="300" viewBox="0 0 200 200">
+                    <filter id="goo"><feGaussianBlur in="SourceGraphic" stdDeviation="10" /><feColorMatrix mode="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 18 -7"/></filter>
+                    <g filter="url(#goo)" fill="#555"><circle cx="100" cy="100" r="40" /></g>
+                </svg>
+            </div>
+        </div>
+    </main>
+
+    <div id="reaction-overlay">
+        <div id="overlay-icon" class="text-7xl md:text-9xl mb-6">💥</div>
+        <h2 id="overlay-title" class="text-4xl md:text-7xl font-bold uppercase mb-4 leading-tight"></h2>
+        <p id="overlay-desc" class="text-sm md:text-xl max-w-2xl px-6 opacity-70 mb-10 font-medium"></p>
+        <button onclick="closeOverlay()" class="px-10 py-4 bg-black text-white font-bold uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-[8px_8px_0px_#ccc]">Clean the Lab</button>
+    </div>
+
+    <script>
+        const chemicals = [
+            { id: 'Na', name: 'Sodium', formula: 'Na', color: '#E0E0E0', info: 'Soft alkali metal that is highly reactive.' },
+            { id: 'Cl2', name: 'Chlorine', formula: 'Cl₂', color: '#D4F1BE', info: 'Toxic halogen gas that is highly reactive.' },
+            { id: 'H2O', name: 'Water', formula: 'H₂O', color: '#BDE0FE', info: 'The most common polar compound on Earth.' },
+            { id: 'HCl', name: 'Hydrochloric Acid', formula: 'HCl', color: '#F8F9FA', info: 'Strong acid with corrosive properties.' },
+            { id: 'NaOH', name: 'Sodium Hydroxide', formula: 'NaOH', color: '#FFFFFF', info: 'Strong base used in industrial applications.' },
+            { id: 'H2SO4', name: 'Sulfuric Acid', formula: 'H₂SO₄', color: '#EEE', info: 'Very strong mineral acid.' },
+            { id: 'CuSO4', name: 'Copper Sulfate', formula: 'CuSO₄', color: '#0077B6', info: 'Bright blue transition salt.' },
+            { id: 'Fe', name: 'Iron', formula: 'Fe', color: '#778899', info: 'Transition metal that can rust.' },
+            { id: 'H2O2', name: 'Hydrogen Peroxide', formula: 'H₂O₂', color: '#F0F8FF', info: 'Strong oxidizer for bleaching.' },
+            { id: 'MnO2', name: 'Manganese Dioxide', formula: 'MnO₂', color: '#222', info: 'Jet black catalyst.' }
+        ];
+
+        const reactionDb = {
+            'H2O,Na': { 
+                result: 'HYDROGEN EXPLOSION', 
+                formula: '2Na + 2H₂O → 2NaOH + H₂ ↑', 
+                color: '#fff', 
+                msg: 'A violent exothermic reaction! Sodium dances on top of water and explodes releasing Hydrogen gas.',
+                danger: true, icon: '🔥', ach: 'The Pyromaniac'
+            },
+            'CuSO4,Fe': { 
+                result: 'COPPER GILDING', 
+                formula: 'Fe + CuSO₄ → FeSO₄ + Cu', 
+                color: '#CD7F32', 
+                msg: 'A single displacement reaction. The blue solution turns green and iron is coated with brown copper.',
+                danger: false, ach: 'The Alchemist'
+            },
+            'Cl2,Na': { 
+                result: 'SODIUM CHLORIDE', 
+                formula: '2Na + Cl₂ → 2NaCl', 
+                color: '#FFF', 
+                msg: 'Sodium reacts violently with chlorine gas to form white sodium chloride crystals.',
+                danger: false, ach: 'Seasoning Expert'
+            },
+            'H2O2,MnO2': {
+                result: 'OXYGEN MOUNTAIN',
+                formula: '2H₂O₂ → 2H₂O + O₂ ↑',
+                color: '#fff',
+                msg: 'Rapid decomposition! Oxygen is released as a dense white vapor.',
+                danger: true, icon: '💨', ach: 'Oxygen Farmer'
+            }
+        };
+
+        let currentMix = [];
+        let unlockedAchievements = [];
+
+        function init() {
+            const grid = document.getElementById('chemical-grid');
+            chemicals.forEach(chem => {
+                const div = document.createElement('div');
+                div.className = 'chem-card p-3 flex flex-col justify-between h-20';
+                div.id = `chem-${chem.id}`;
+                div.innerHTML = `<span class="mono text-[10px] font-bold">${chem.formula}</span><span class="text-xs font-bold uppercase">${chem.name}</span>`;
+                div.onclick = () => addToLab(chem);
+                grid.appendChild(div);
+            });
+        }
+
+        function addToLab(chem) {
+            if (currentMix.includes(chem.id)) return;
+            currentMix.push(chem.id);
+            document.getElementById(`chem-${chem.id}`).classList.add('active');
+            document.getElementById('item-count').innerText = `${currentMix.length} Selected`;
+            updateVisuals(chem);
+            checkReactions();
+            logSystem(`+ ${chem.name} added.`);
+        }
+
+        function updateVisuals(chem) {
+            const liquid = document.getElementById('liquid-body');
+            const fill = Math.min(currentMix.length * 15, 85);
+            liquid.style.height = `${fill}%`;
+            liquid.style.backgroundColor = chem.color;
+            document.getElementById('chem-name-display').innerText = chem.name;
+            document.getElementById('chem-formula-display').innerText = currentMix.map(id => chemicals.find(c => c.id === id).formula).join(' + ');
+            document.getElementById('chem-desc-display').innerText = chem.info;
+            createBubbles(5);
+        }
+
+        function checkReactions() {
+            if (currentMix.length < 2) return;
+            const combo = [...currentMix].sort().join(',');
+            let match = reactionDb[combo];
+
+            if(!match && currentMix.length > 2) {
+                const last2 = currentMix.slice(-2).sort().join(',');
+                match = reactionDb[last2];
+            }
+
+            if (match) {
+                processReaction(match);
+                if(match.ach) unlockAchievement(match.ach);
+            }
+        }
+
+        function processReaction(data) {
+            setTimeout(() => {
+                const beaker = document.getElementById('beaker-main');
+                const liquid = document.getElementById('liquid-body');
+                liquid.style.backgroundColor = data.color;
+                beaker.classList.add('shake-heavy');
+                
+                if(data.danger) {
+                    document.getElementById('smoke-box').style.opacity = '1';
+                    setTimeout(() => showOverlay(data.icon, data.result, data.msg), 1200);
+                } else {
+                    logSystem(`SUCCESS: ${data.result}`);
+                    document.getElementById('chem-name-display').innerText = data.result;
+                    setTimeout(() => beaker.classList.remove('shake-heavy'), 1000);
+                }
+                createBubbles(30);
+            }, 300);
+        }
+
+        function unlockAchievement(title) {
+            if (unlockedAchievements.includes(title)) return;
+            unlockedAchievements.push(title);
+            const toast = document.getElementById('achievement-container');
+            document.getElementById('ach-title').innerText = title;
+            toast.classList.add('active');
+            setTimeout(() => toast.classList.remove('active'), 4000);
+        }
+
+        function createBubbles(count) {
+            const container = document.getElementById('bubble-container');
+            for (let i = 0; i < count; i++) {
+                const b = document.createElement('div');
+                b.className = 'bubble';
+                const size = Math.random() * 12 + 4;
+                b.style.width = `${size}px`; b.style.height = `${size}px`;
+                b.style.left = `${Math.random() * 100}%`;
+                b.style.animationDelay = `${Math.random() * 2}s`;
+                container.appendChild(b);
+                setTimeout(() => b.remove(), 3000);
+            }
+        }
+
+        function logSystem(msg) {
+            const log = document.getElementById('log-display');
+            const p = document.createElement('p');
+            p.innerHTML = `<span class="opacity-30">></span> ${msg}`;
+            log.appendChild(p);
+        }
+
+        function showOverlay(icon, title, desc) {
+            document.getElementById('overlay-icon').innerText = icon;
+            document.getElementById('overlay-title').innerText = title;
+            document.getElementById('overlay-desc').innerText = desc;
+            document.getElementById('reaction-overlay').style.display = 'flex';
+        }
+
+        function closeOverlay() {
+            document.getElementById('reaction-overlay').style.display = 'none';
+            resetLab();
+        }
+
+        function resetLab() {
+            currentMix = [];
+            document.getElementById('liquid-body').style.height = '0%';
+            document.getElementById('beaker-main').classList.remove('shake-heavy');
+            document.getElementById('smoke-box').style.opacity = '0';
+            document.getElementById('chem-name-display').innerText = 'Standby';
+            document.getElementById('chem-formula-display').innerText = '-';
+            document.getElementById('item-count').innerText = '0 Selected';
+            chemicals.forEach(c => document.getElementById(`chem-${c.id}`).classList.remove('active'));
+            logSystem("System Rebooted.");
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
